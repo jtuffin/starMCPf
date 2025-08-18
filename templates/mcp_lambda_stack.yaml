@@ -1,0 +1,233 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'MCP Server deployment on AWS Lambda with API Gateway'
+
+Parameters:
+  MCPServerName:
+    Type: String
+    Default: mcp-server
+    Description: Name for the MCP server
+    
+  LambdaCodeBucket:
+    Type: String
+    Description: S3 bucket containing the Lambda deployment package
+    
+  LambdaCodeKey:
+    Type: String
+    Default: mcp_lambda.zip
+    Description: S3 key for the Lambda deployment package
+    
+  LambdaMemorySize:
+    Type: Number
+    Default: 512
+    MinValue: 128
+    MaxValue: 10240
+    Description: Memory size for Lambda function (MB)
+    
+  LambdaTimeout:
+    Type: Number
+    Default: 30
+    MinValue: 1
+    MaxValue: 900
+    Description: Lambda function timeout (seconds)
+
+Resources:
+  # IAM Role for Lambda
+  MCPLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${MCPServerName}-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: MCPLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Add any additional permissions your MCP server needs
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+              # Example: Add S3 access if needed
+              # - Effect: Allow
+              #   Action:
+              #     - s3:GetObject
+              #     - s3:PutObject
+              #   Resource: !Sub 'arn:aws:s3:::your-bucket/*'
+
+  # Lambda Function
+  MCPLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${MCPServerName}-function'
+      Runtime: python3.9
+      Handler: lambda_handler.lambda_handler
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey
+      MemorySize: !Ref LambdaMemorySize
+      Timeout: !Ref LambdaTimeout
+      Role: !GetAtt MCPLambdaRole.Arn
+      Environment:
+        Variables:
+          MCP_SERVER_NAME: !Ref MCPServerName
+          ENVIRONMENT: production
+      Tags:
+        - Key: Name
+          Value: !Sub '${MCPServerName}-lambda'
+        - Key: Type
+          Value: MCP-Server
+
+  # Lambda Log Group
+  MCPLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${MCPLambdaFunction}'
+      RetentionInDays: 7
+
+  # API Gateway REST API
+  MCPApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${MCPServerName}-api'
+      Description: API Gateway for MCP Server
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  # API Gateway Resource
+  MCPApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref MCPApiGateway
+      ParentId: !GetAtt MCPApiGateway.RootResourceId
+      PathPart: mcp
+
+  # API Gateway Method - POST
+  MCPApiMethodPost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref MCPApiGateway
+      ResourceId: !Ref MCPApiResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MCPLambdaFunction.Arn}/invocations'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # API Gateway Method - OPTIONS (for CORS)
+  MCPApiMethodOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref MCPApiGateway
+      ResourceId: !Ref MCPApiResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # Lambda Permission for API Gateway
+  MCPLambdaApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref MCPLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MCPApiGateway}/*/*'
+
+  # API Gateway Deployment
+  MCPApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - MCPApiMethodPost
+      - MCPApiMethodOptions
+    Properties:
+      RestApiId: !Ref MCPApiGateway
+      StageName: prod
+
+  # CloudWatch Alarms
+  MCPLambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${MCPServerName}-lambda-errors'
+      AlarmDescription: Alert when Lambda function has errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref MCPLambdaFunction
+
+  MCPLambdaThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${MCPServerName}-lambda-throttles'
+      AlarmDescription: Alert when Lambda function is throttled
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref MCPLambdaFunction
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL for MCP server
+    Value: !Sub 'https://${MCPApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/mcp'
+    Export:
+      Name: !Sub '${MCPServerName}-api-endpoint'
+      
+  LambdaFunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt MCPLambdaFunction.Arn
+    Export:
+      Name: !Sub '${MCPServerName}-lambda-arn'
+      
+  ApiGatewayId:
+    Description: API Gateway ID
+    Value: !Ref MCPApiGateway
+    Export:
+      Name: !Sub '${MCPServerName}-api-id'
