@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "demo-mcp-server": {
+      "command": "python3",
+      "args": ["local_server.py"],
+      "cwd": "/home/jtuffin/projects/mcp_framework"
+    }
+  }
+}
