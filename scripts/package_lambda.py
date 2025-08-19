@@ -41,7 +41,12 @@ def create_lambda_package(server_file: str, output_file: str = "mcp_lambda.zip")
 import json
 import sys
 import asyncio
+import logging
 from pathlib import Path
+
+# Set up CloudWatch logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 # Import the user's server
 sys.path.insert(0, str(Path(__file__).parent))
@@ -61,8 +66,14 @@ async def process_request(event):
     else:
         body = event
     
+    # Log the incoming request
+    logger.info(f"MCP Request: {json.dumps(body)}")
+    
     # Handle the MCP request
     response = await handle_request(body)
+    
+    # Log the response
+    logger.info(f"MCP Response: {json.dumps(response)}")
     
     # Return Lambda response format
     return {
@@ -79,8 +90,13 @@ async def process_request(event):
 def lambda_handler(event, context):
     """AWS Lambda entry point"""
     
+    # Log Lambda invocation details
+    logger.info(f"Lambda invoked with request ID: {context.request_id}")
+    logger.info(f"Event: {json.dumps(event)}")
+    
     # Handle OPTIONS request for CORS
     if event.get("httpMethod") == "OPTIONS":
+        logger.info("Handling OPTIONS request for CORS")
         return {
             "statusCode": 200,
             "headers": {
@@ -91,8 +107,21 @@ def lambda_handler(event, context):
             "body": ""
         }
     
-    # Process the MCP request
-    return asyncio.run(process_request(event))
+    try:
+        # Process the MCP request
+        result = asyncio.run(process_request(event))
+        logger.info(f"Request processed successfully")
+        return result
+    except Exception as e:
+        logger.error(f"Error processing request: {str(e)}", exc_info=True)
+        return {
+            "statusCode": 500,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            },
+            "body": json.dumps({"error": str(e)})
+        }
 '''
         
         # Write Lambda handler

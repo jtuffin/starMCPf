@@ -3,8 +3,12 @@
 import asyncio
 import json
 import sys
+import logging
 from typing import Callable, Dict, Any, List
 from functools import wraps
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 # Global registry for tools, resources, and prompts
 _tools = {}
@@ -92,6 +96,9 @@ async def handle_request(request: Dict[str, Any]) -> Dict[str, Any]:
     params = request.get("params", {})
     request_id = request.get("id", 1)
     
+    # Log incoming request
+    logger.info(f"Processing MCP method: {method} with params: {json.dumps(params)}")
+    
     try:
         # Route to appropriate handler
         if method == "initialize":
@@ -123,6 +130,10 @@ async def handle_request(request: Dict[str, Any]) -> Dict[str, Any]:
         elif method == "tools/call":
             tool_name = params.get("name")
             arguments = params.get("arguments", {})
+            
+            # Log tool call
+            logger.info(f"Tool call: {tool_name} with arguments: {json.dumps(arguments)}")
+            
             if tool_name in _tools:
                 handler = _tools[tool_name]["handler"]
                 try:
@@ -130,11 +141,17 @@ async def handle_request(request: Dict[str, Any]) -> Dict[str, Any]:
                         tool_result = await handler(**arguments)
                     else:
                         tool_result = handler(**arguments)
+                    
+                    # Log tool result
+                    logger.info(f"Tool {tool_name} result: {json.dumps(tool_result)}")
+                    
                 except TypeError as e:
                     # Handle missing arguments more gracefully
+                    logger.error(f"Tool '{tool_name}' error: {str(e)}")
                     raise ValueError(f"Tool '{tool_name}' error: {str(e)}")
                 result = {"content": [{"type": "text", "text": json.dumps(tool_result)}]}
             else:
+                logger.error(f"Unknown tool requested: {tool_name}")
                 raise ValueError(f"Unknown tool: {tool_name}")
         
         elif method == "resources/list":
