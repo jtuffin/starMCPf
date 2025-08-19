@@ -1,0 +1,146 @@
+Metadata-Version: 2.4
+Name: mcp-framework
+Version: 0.1.0
+Summary: Opinionated MCP Framework for AWS Lambda deployment
+Author-email: MCP Framework Team <team@example.com>
+License: MIT
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: fastmcp>=0.1.0
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: boto3>=1.26.0
+Requires-Dist: aioboto3>=11.0.0
+Requires-Dist: structlog>=23.0.0
+Requires-Dist: python-json-logger>=2.0.0
+Requires-Dist: aiohttp>=3.8.0
+Requires-Dist: asyncio>=3.4.3
+Requires-Dist: typing-extensions>=4.5.0
+Requires-Dist: python-dotenv>=1.0.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.21.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+Requires-Dist: mypy>=1.0.0; extra == "dev"
+Requires-Dist: boto3-stubs[apigatewayv2,lambda,logs,secretsmanager,xray]>=1.26.0; extra == "dev"
+Provides-Extra: local
+Requires-Dist: uvicorn>=0.20.0; extra == "local"
+Requires-Dist: fastapi>=0.100.0; extra == "local"
+Dynamic: license-file
+
+# MCP Framework
+
+An opinionated framework for building Model Context Protocol (MCP) servers optimized for AWS Lambda deployment.
+
+## Features
+
+- **Simple API**: Decorator-based tool, resource, and prompt definitions
+- **Lambda-Ready**: Built-in adaptation layer for AWS Lambda and API Gateway
+- **FastMCP Integration**: Lightweight async-first MCP implementation
+- **Enterprise Features**: Security, observability, and deployment tooling
+- **AWS Native**: CloudFormation templates and deployment scripts included
+
+## Quick Start
+
+### Installation
+
+```bash
+pip install mcp-framework
+```
+
+### Creating an MCP Server
+
+```python
+from mcp_framework import MCPServer, Tool, Resource, Prompt
+
+class MyMCPServer(MCPServer):
+    
+    @Tool(name="get_data", description="Fetch data from database")
+    async def get_data(self, query: str) -> dict:
+        # Your business logic here
+        return {"result": "data"}
+    
+    @Resource(uri="config://settings")
+    async def get_settings(self) -> dict:
+        return {"setting": "value"}
+    
+    @Prompt(name="analyze", description="Generate analysis prompt")
+    async def analyze_prompt(self, context: dict) -> str:
+        return f"Analyze: {context}"
+```
+
+### Lambda Deployment
+
+```python
+from mcp_framework import create_lambda_handler
+
+# Lambda handler
+def lambda_handler(event, context):
+    handler = create_lambda_handler(MyMCPServer, {
+        "name": "my-mcp-server",
+        "version": "1.0.0"
+    })
+    return handler(event, context)
+```
+
+## Architecture
+
+The framework provides:
+
+1. **Core Framework** - Base MCP server implementation with FastMCP
+2. **Lambda Adapter** - Converts between Lambda events and MCP protocol
+3. **Security Module** - Authentication, authorization, input validation
+4. **Observability** - CloudWatch logging, metrics, and tracing
+5. **Deployment Tools** - CloudFormation templates and scripts
+
+## Demo Server
+
+See `examples/demo_server.py` for a complete working example with:
+- Multiple tools (weather, calculator, data storage)
+- Resources (config, metrics, database)
+- Prompts (weather analysis, data insights)
+
+Run the demo locally:
+```bash
+python examples/demo_server.py
+```
+
+## Project Structure
+
+```
+mcp-framework/
+├── src/mcp_framework/       # Framework source code
+│   ├── core/               # Core MCP server implementation
+│   ├── security/           # Security features
+│   ├── observability/      # Logging and metrics
+│   ├── integration/        # External integrations
+│   └── dev/               # Development tools
+├── templates/              # CloudFormation templates
+├── scripts/               # Deployment scripts
+├── examples/              # Example implementations
+└── tests/                 # Test suite
+```
+
+## Development Status
+
+This framework is in active development. Current features:
+- ✅ Core MCP server with decorators
+- ✅ Lambda adaptation layer
+- ✅ Working demo server
+- ⏳ Security module (in progress)
+- ⏳ CloudFormation templates (in progress)
+- ⏳ Full FastMCP integration (in progress)
+
+## License
+
+MIT
