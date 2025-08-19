@@ -91,7 +91,8 @@ def lambda_handler(event, context):
     """AWS Lambda entry point"""
     
     # Log Lambda invocation details
-    logger.info(f"Lambda invoked with request ID: {context.request_id}")
+    request_id = getattr(context, 'aws_request_id', 'unknown')
+    logger.info(f"Lambda invoked with request ID: {request_id}")
     logger.info(f"Event: {json.dumps(event)}")
     
     # Handle OPTIONS request for CORS

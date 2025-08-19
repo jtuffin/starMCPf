@@ -3,7 +3,14 @@
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+import re
+import socket
+import platform
+import operator
+
+# Add parent directory to path for local development
+if __name__ == "__main__":
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from mcp_framework.simplified import tool, resource, prompt, serve
 
@@ -21,7 +28,6 @@ async def get_weather(location: str) -> dict:
 @tool("calculate", "Perform a calculation")
 async def calculate(expression: str) -> dict:
     """Simple calculator - safely evaluates basic math expressions"""
-    import re
     
     try:
         # Remove whitespace
@@ -43,7 +49,6 @@ async def calculate(expression: str) -> dict:
             
             # Parse the expression step by step
             # This is a simple implementation - could be enhanced
-            import operator
             ops = {'+': operator.add, '-': operator.sub, 
                    '*': operator.mul, '/': operator.truediv}
             
@@ -113,9 +118,35 @@ async def calculate(expression: str) -> dict:
 @resource("config://settings")
 async def settings() -> dict:
     """Server configuration"""
+    
+    # Get hostname and environment info
+    hostname = socket.gethostname()
+    is_lambda = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+    
     return {
         "version": "1.0.0",
-        "environment": "demo"
+        "environment": "AWS Lambda" if is_lambda else "local",
+        "hostname": hostname,
+        "function_name": os.environ.get("AWS_LAMBDA_FUNCTION_NAME", "local"),
+        "region": os.environ.get("AWS_REGION", "local")
+    }
+
+@tool("get_system_info", "Get system and environment information")
+async def get_system_info() -> dict:
+    """Get detailed system information"""
+    
+    return {
+        "hostname": socket.gethostname(),
+        "platform": platform.platform(),
+        "python_version": platform.python_version(),
+        "is_lambda": bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME")),
+        "lambda_function": os.environ.get("AWS_LAMBDA_FUNCTION_NAME", "not-in-lambda"),
+        "lambda_version": os.environ.get("AWS_LAMBDA_FUNCTION_VERSION", "n/a"),
+        "aws_region": os.environ.get("AWS_REGION", "not-in-aws"),
+        "aws_execution_env": os.environ.get("AWS_EXECUTION_ENV", "not-in-aws"),
+        "memory_limit": os.environ.get("AWS_LAMBDA_FUNCTION_MEMORY_SIZE", "n/a"),
+        "log_group": os.environ.get("AWS_LAMBDA_LOG_GROUP_NAME", "n/a"),
+        "request_id": os.environ.get("AWS_REQUEST_ID", "n/a")
     }
 
 @prompt("analyze")
