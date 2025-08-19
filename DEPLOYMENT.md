@@ -2,6 +2,14 @@
 
 This guide explains how to deploy your MCP server to AWS Lambda with API Gateway.
 
+## Latest Successful Deployment
+
+✅ **Successfully tested deployment to AWS**
+- **Status**: Framework verified working on AWS Lambda
+- **Default Stack Name**: mcp-server-stack
+- **Tested Region**: us-east-1
+- **Runtime**: Python 3.12
+
 ## Prerequisites
 
 1. **AWS Account**: You need an AWS account
@@ -17,6 +25,14 @@ This guide explains how to deploy your MCP server to AWS Lambda with API Gateway
 Deploy your MCP server with one command:
 
 ```bash
+# Set AWS profile (if needed)
+export AWS_PROFILE=your-profile
+export AWS_DEFAULT_REGION=us-east-1
+
+# Deploy with default settings
+./scripts/deploy_to_aws.sh
+
+# Or specify custom stack name and server file
 ./scripts/deploy_to_aws.sh my-mcp-stack examples/simple_demo.py
 ```
 
@@ -78,6 +94,41 @@ curl -X POST https://your-api-id.execute-api.region.amazonaws.com/prod/mcp \
       "arguments":{"location":"San Francisco"}
     }
   }'
+```
+
+### Testing with Interactive Lambda Client
+
+You can also test the deployed Lambda endpoint using the interactive client:
+
+```bash
+# Run the interactive Lambda client
+python3 interactive_client_lambda.py
+
+# It will prompt for the endpoint URL
+# Enter your deployed endpoint URL
+# Example: https://your-api-id.execute-api.region.amazonaws.com/prod/mcp
+
+# Then interact with the MCP server
+> list
+Available tools:
+- get_weather: Get weather for a location
+- calculate: Perform a calculation
+
+> call calculate {"expression": "10 * 5"}
+Result: {"expression": "10 * 5", "result": 50}
+
+> call get_weather {"location": "Tokyo"}
+Result: {"location": "Tokyo", "temperature": "72°F", "condition": "Sunny"}
+```
+
+#### Using Environment Variable for Endpoint
+
+```bash
+# Set the endpoint as environment variable
+export LAMBDA_ENDPOINT="https://your-api-id.execute-api.region.amazonaws.com/prod/mcp"
+
+# Run the client (it will use the environment variable)
+python3 interactive_client_lambda.py
 ```
 
 ## CloudFormation Template
@@ -286,6 +337,24 @@ jobs:
       - run: ./scripts/deploy_to_aws.sh production-mcp
 ```
 
+## Working Examples
+
+### Deployment Verification
+
+The framework has been tested and verified working on AWS Lambda.
+After deployment, you can test your endpoint:
+
+```bash
+# Test your deployment
+curl -X POST https://your-api-id.execute-api.region.amazonaws.com/prod/mcp \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+
+# Or use the interactive client
+export LAMBDA_ENDPOINT="https://your-api-id.execute-api.region.amazonaws.com/prod/mcp"
+python3 interactive_client_lambda.py
+```
+
 ## Summary
 
 The deployment process is straightforward:
@@ -296,3 +365,11 @@ The deployment process is straightforward:
 4. **Use the API endpoint** in your applications
 
 The framework handles all the complexity of Lambda adaptation, API Gateway integration, and MCP protocol compliance.
+
+### Verified Working
+- ✅ Deployment scripts tested and working
+- ✅ CloudFormation template validated
+- ✅ Lambda function running Python 3.12
+- ✅ API Gateway configured with CORS
+- ✅ Interactive client tested against live endpoint
+- ✅ All MCP protocol methods working correctly
